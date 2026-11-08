@@ -1,7 +1,7 @@
 name: Build container
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/discovery-api']
   pull_request:
     branches: [main]
 permissions:
@@ -32,7 +32,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and publish commit image on main
+      - name: Build and publish commit image on trusted branches
         uses: docker/build-push-action@v6
         with:
           context: .
