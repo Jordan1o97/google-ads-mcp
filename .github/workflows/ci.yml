@@ -56,6 +56,7 @@ jobs:
         run: nox -s smoke_tests
 
   llm-tests:
+    if: ${{ false }} # Requires a paid external API and is never run automatically.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
