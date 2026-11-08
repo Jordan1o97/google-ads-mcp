@@ -24,6 +24,19 @@ from ads_mcp.config import ToolsConfig
 class TestToolsMounting(unittest.IsolatedAsyncioTestCase):
     """Verifies that tools are mounted and namespaced according to ToolsConfig."""
 
+    async def test_shipped_config_mounts_api_and_hides_write_namespaces(self):
+        from fastmcp import FastMCP
+        from ads_mcp.coordinator import initialize_and_mount_tools
+
+        parent = FastMCP("Default Config Test")
+        initialize_and_mount_tools(parent)
+        names = {tool.name for tool in await parent.list_tools()}
+
+        self.assertIn("api_discover_api_methods", names)
+        self.assertIn("api_execute_api_method", names)
+        self.assertNotIn("labels_manage_labels", names)
+        self.assertNotIn("assets_create_asset", names)
+
     @patch("ads_mcp.config.ToolsConfig.load")
     async def test_mounting_all_enabled_default_prefixes(self, mock_load):
         """Tests mounting with all categories enabled and default namespace prefixes."""

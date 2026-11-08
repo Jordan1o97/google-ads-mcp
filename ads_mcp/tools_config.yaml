@@ -7,5 +7,9 @@ namespaces:
   customers: true
   search: true
   metadata: true
-  labels: true
-  assets: true
+  labels: false
+  assets: false
+  api:
+    enabled: true
+    allow_writes: false
+    allowed_methods: []
