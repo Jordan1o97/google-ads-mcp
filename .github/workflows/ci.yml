@@ -54,6 +54,17 @@ jobs:
           pip install nox .
       - name: Run smoke tests
         run: nox -s smoke_tests
+      - name: Capture observed tool list on failure
+        if: failure()
+        run: |
+          python -c 'import json; from tests.smoke import smoke_utils; data=smoke_utils.get_tools_list(); data["tools"].sort(key=lambda x: x.get("name", "")); open("actual-tools.json", "w").write(json.dumps(data, indent=2, sort_keys=True)+"\n")'
+      - name: Upload observed tool list
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observed-tools
+          path: actual-tools.json
+          if-no-files-found: error
 
   llm-tests:
     if: ${{ false }} # Requires a paid external API and is never run automatically.
