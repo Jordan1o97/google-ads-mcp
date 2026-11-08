@@ -12,6 +12,16 @@ This repo contains the source code for running an
 [MCP](https://modelcontextprotocol.io) server that interacts with the
 [Google Ads API](https://developers.google.com/google-ads/api).
 
+## Experimental generic API tools
+
+This fork adds `api_discover_api_methods`, which lists service/RPC methods from the **installed Google Ads Python SDK**, and `api_execute_api_method`, which invokes an exact allowlisted SDK method. Discovery is not a promise that a method is executable or supported. By default only `CustomerService.ListAccessibleCustomers`, `GoogleAdsFieldService.GetGoogleAdsField`, `GoogleAdsFieldService.SearchGoogleAdsFields`, `GoogleAdsService.Search`, and `GoogleAdsService.SearchStream` are allowed. Other methods are denied. SDK versions determine the actual RPC version; the upstream discovery resource currently requests REST v25, while the supplied research reference describes REST v26. They are not interchangeable coverage guarantees.
+
+The generic executor takes an SDK service name, RPC method name, and SDK keyword arguments, using snake_case inside `parameters`. Some SDK methods require a `request` object/dictionary rather than flattened arguments; consult the installed SDK. Responses are converted using upstream helpers. Pagination can be consumed into memory and streaming responses are not exposed as incremental MCP streams. Large results and all API-specific edge cases need further work. Structured errors and request IDs are not yet consistently preserved.
+
+The operator can explicitly configure exact additional methods and `allow_writes`, but those calls can immediately change accounts, spend money or upload data. They do not use the upstream confirmation workflow. Do not enable them in production until caller authorization, per-operation approval, safety checks and auditing are independently implemented and verified. The code blocks method names containing `generate`, which is **not** a comprehensive paid-media or write safety policy.
+
+**OAuth and deployment status:** upstream FastMCP Google OAuth code is included, but this fork has not yet verified browser state/PKCE, callback, refresh-token lifecycle, secure storage, or an independent authorization gate for remote MCP callers. Mocked credential selection is not a browser OAuth test. Do not expose the server publicly. A Google Cloud project with Google Ads API access and an account holder's consent are required; check Google's current policy and SDK documentation for project access and any developer-token requirements. No live Ads call has been verified for this fork.
+
 ## Tools
 
 The server uses the
@@ -32,7 +42,7 @@ to provide several
 
 ### Propose & Confirm Safety Workflow (Mutate Tools)
 
-All write/mutate tools (`create_asset`, `upload_video_asset`, `manage_labels`, and `manage_label_associations`) enforce a two-step **Propose & Confirm** safety workflow:
+The bundled configuration disables `labels` and `assets`. If an operator deliberately enables these upstream tools, they use a two-step **Propose & Confirm** workflow. The separate generic `api_execute_api_method` tool does **not** use this workflow: its writes are disabled by default, and explicitly allowlisting a write permits a direct call. This is a development preview, not an authorization mechanism.
 
 1. **Propose (`validate_only=True`, default)**: Validates the operation (including a Google Ads API `validate_only` dry run where supported) without committing changes, returning human-readable `change_items` and a cryptographic `checksum` bound to the customer ID and parameters.
 2. **Confirm (`validate_only=False`)**: Requires passing the exact same parameters and `customer_id` together with the `checksum` returned in step 1 after explicit user approval. Any missing or mismatched checksum is rejected before mutating the account.
@@ -41,7 +51,7 @@ All write/mutate tools (`create_asset`, `upload_video_asset`, `manage_labels`, a
 
 The Google Ads MCP server uses `tools_config.yaml` to let you selectively enable or disable individual tools or tool categories (namespaces) and customize their namespace prefixes.
 
-A default `tools_config.yaml` with all tools enabled is bundled with the package, so the server works out of the box with no extra setup. For strictly read-only deployments, set `labels: false` and `assets: false` in your `tools_config.yaml`. To customize your installation, the server resolves the configuration in the following order:
+The bundled `tools_config.yaml` enables read-oriented namespaces and the experimental generic API namespace. It disables the upstream `labels` and `assets` namespaces and generic writes. This is a tool-level restriction, not a read-only OAuth scope: Google Ads uses a single `adwords` scope. Configuration can enable dangerous operations and is not a substitute for caller authentication or explicit approval. To customize your installation, the server resolves the configuration in the following order:
 
 1. An explicit path set via the `GOOGLE_ADS_MCP_TOOLS_CONFIG` environment variable.
 2. A `tools_config.yaml` file in the current working directory.
