@@ -115,8 +115,9 @@ def _method_allowed(
         return False
     config = config or {}
     return bool(
-        config.get("allow_writes", False)
-        and identifier in config.get("allowed_methods", [])
+        config.get("allow_writes") is True
+        and isinstance(config.get("allowed_methods"), list)
+        and identifier in config["allowed_methods"]
     )
 
 
@@ -208,5 +209,7 @@ def execute_method(
         return utils.format_output_value(method(**parameters))
     except ToolError:
         raise
-    except Exception as exc:
-        raise ToolError(f"Google Ads API call failed: {exc}") from exc
+    except Exception:
+        # SDK exceptions can include request data or credentials. Do not return
+        # or chain untrusted exception text into an MCP response or traceback.
+        raise ToolError("Google Ads API call failed") from None
