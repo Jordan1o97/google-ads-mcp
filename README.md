@@ -1,5 +1,13 @@
 # Google Ads MCP Server
 
+> **Fork under development, not a production-ready release.** This repository
+> originates from [googleads/google-ads-mcp](https://github.com/googleads/google-ads-mcp)
+> (Apache-2.0). The upstream documentation below describes upstream behaviour,
+> not a verified hosted deployment. OAuth, tenant access, and remote caller
+> protection require separate configuration and testing. Do not expose an
+> unauthenticated instance, and do not authorize account changes or spending
+> without the account owner's explicit approval.
+
 This repo contains the source code for running an
 [MCP](https://modelcontextprotocol.io) server that interacts with the
 [Google Ads API](https://developers.google.com/google-ads/api).
