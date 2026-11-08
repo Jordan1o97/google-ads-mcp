@@ -106,6 +106,30 @@ class TestApiDiscovery(unittest.TestCase):
             customer_id="123", operations=[]
         )
 
+    def test_string_false_never_enables_writes(self):
+        self.assertFalse(
+            api._method_allowed(
+                "CampaignService",
+                "MutateCampaigns",
+                {
+                    "allow_writes": "false",
+                    "allowed_methods": ["CampaignService.MutateCampaigns"],
+                },
+            )
+        )
+
+    def test_exception_secrets_are_not_exposed(self):
+        service = Mock()
+        service.search.side_effect = RuntimeError("sensitive-upstream-value")
+        with self.assertRaises(ToolError) as error:
+            api.execute_method(
+                "GoogleAdsService",
+                "Search",
+                {},
+                service_factory=Mock(return_value=service),
+            )
+        self.assertNotIn("sensitive-upstream-value", str(error.exception))
+
     def test_discovers_methods_from_installed_sdk_without_api_calls(self):
         methods = api.discover_sdk_methods()
 
