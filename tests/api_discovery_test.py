@@ -180,7 +180,8 @@ class TestApiDiscovery(unittest.TestCase):
 
         self.assertTrue(config.is_namespace_enabled("api"))
         self.assertFalse(config.is_namespace_enabled("labels"))
-        self.assertFalse(config.is_namespace_enabled("assets"))
+        # Reviewed 2026-11-10: assets enabled for PAUSED Search campaign builds.
+        self.assertTrue(config.is_namespace_enabled("assets"))
 
     def test_service_discovery_excludes_non_service_modules(self):
         services = api.discover_services(

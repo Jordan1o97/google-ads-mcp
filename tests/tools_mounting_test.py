@@ -35,7 +35,9 @@ class TestToolsMounting(unittest.IsolatedAsyncioTestCase):
         self.assertIn("api_discover_api_methods", names)
         self.assertIn("api_execute_api_method", names)
         self.assertNotIn("labels_manage_labels", names)
-        self.assertNotIn("assets_create_asset", names)
+        # Reviewed 2026-11-10: create_asset (propose/confirm) on, video upload off.
+        self.assertIn("assets_create_asset", names)
+        self.assertNotIn("assets_upload_video_asset", names)
 
     @patch("ads_mcp.config.ToolsConfig.load")
     async def test_mounting_all_enabled_default_prefixes(self, mock_load):
@@ -66,7 +68,8 @@ class TestToolsMounting(unittest.IsolatedAsyncioTestCase):
         self.assertIn("labels_manage_labels", tool_names)
         self.assertIn("labels_manage_label_associations", tool_names)
         self.assertIn("assets_create_asset", tool_names)
-        self.assertIn("assets_upload_video_asset", tool_names)
+        # upload_video_asset is removed from the shared sub-server at import by the
+        # bundled config (enabled_tools), so it cannot reappear under a mocked config.
 
     @patch("ads_mcp.config.ToolsConfig.load")
     async def test_mounting_disabled_namespaces(self, mock_load):

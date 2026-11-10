@@ -100,6 +100,100 @@ def discover_sdk_methods(
     return result
 
 
+# Billing, payments, account-linking and user-access RPCs are never executable,
+# even if an operator adds them to `allowed_methods`. GoogleAdsService.Mutate is
+# denied because it bundles arbitrary resource operations past the per-service
+# status guard below.
+NEVER_EXECUTABLE_SERVICES = frozenset(
+    {
+        "BillingSetupService",
+        "AccountBudgetProposalService",
+        "PaymentsAccountService",
+        "InvoiceService",
+        "CustomerManagerLinkService",
+        "CustomerClientLinkService",
+        "CustomerUserAccessService",
+        "CustomerUserAccessInvitationService",
+    }
+)
+NEVER_EXECUTABLE_METHODS = frozenset({"GoogleAdsService.Mutate"})
+
+# Services whose entities can start serving (and spending). Writes through them
+# may only create or keep entities PAUSED; ENABLED is rejected anywhere in the
+# request, and creates must state PAUSED explicitly.
+PAUSED_ONLY_SERVICES = frozenset(
+    {"CampaignService", "AdGroupAdService", "AdGroupService"}
+)
+_PAUSED_VALUES = {"PAUSED", 3}
+_ENABLED_VALUES = {"ENABLED", 2}
+
+
+def _status_value(value: Any) -> Any:
+    name = getattr(value, "name", None)
+    if isinstance(name, str):
+        return name.upper()
+    if isinstance(value, str):
+        return value.strip().upper()
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return value
+
+
+def _iter_status_values(obj: Any):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key == "status":
+                yield _status_value(value)
+            yield from _iter_status_values(value)
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            yield from _iter_status_values(item)
+
+
+def enforce_write_policy(service_name: str, parameters: dict[str, Any]) -> None:
+    """Rejects writes that would enable serving entities.
+
+    Campaigns, ad groups and ads may be created or updated only as PAUSED.
+    The check is structural: every ``status`` field anywhere in the request
+    is inspected, and every ``create`` operation must carry PAUSED.
+    """
+    if service_name not in PAUSED_ONLY_SERVICES:
+        return
+    for status in _iter_status_values(parameters):
+        if status in _ENABLED_VALUES:
+            raise ToolError(
+                f"{service_name}: setting status ENABLED is blocked by server "
+                "policy; create and keep entities PAUSED and enable them in "
+                "the Google Ads UI after review."
+            )
+        if status not in _PAUSED_VALUES and status != "REMOVED" and status != 4:
+            raise ToolError(
+                f"{service_name}: status must be PAUSED (got {status!r})."
+            )
+    request = parameters.get("request")
+    operations = (
+        request.get("operations") if isinstance(request, dict) else None
+    ) or parameters.get("operations")
+    if operations is None:
+        raise ToolError(
+            f"{service_name}: writes must pass `operations` as JSON objects "
+            "so the PAUSED-only policy can be verified."
+        )
+    if not isinstance(operations, list) or not all(
+        isinstance(op, dict) for op in operations
+    ):
+        raise ToolError(f"{service_name}: `operations` must be a list of objects.")
+    for op in operations:
+        create = op.get("create")
+        if create is not None and (
+            not isinstance(create, dict)
+            or _status_value(create.get("status")) not in _PAUSED_VALUES
+        ):
+            raise ToolError(
+                f"{service_name}: create operations must set status PAUSED."
+            )
+
+
 def _method_allowed(
     service_name: str,
     method_name: str,
@@ -109,6 +203,11 @@ def _method_allowed(
     identifier = f"{service_name}.{method_name}"
     if identifier in SAFE_READ_METHODS:
         return True
+    if (
+        service_name in NEVER_EXECUTABLE_SERVICES
+        or identifier in NEVER_EXECUTABLE_METHODS
+    ):
+        return False
     # Generation methods can incur costs and remain denied even if accidentally
     # added to a write allowlist.
     if "generate" in method_name.casefold():
@@ -197,6 +296,8 @@ def execute_method(
         raise ToolError(
             f"Method {service_name}.{method_name} is not allowlisted for execution"
         )
+    if f"{service_name}.{method_name}" not in SAFE_READ_METHODS:
+        enforce_write_policy(service_name, parameters)
     try:
         service = service_factory(
             service_name, login_customer_id=login_customer_id
@@ -209,7 +310,13 @@ def execute_method(
         return utils.format_output_value(method(**parameters))
     except ToolError:
         raise
-    except Exception:
+    except Exception as ex:
+        from google.ads.googleads.errors import GoogleAdsException
+
+        if isinstance(ex, GoogleAdsException):
+            # Only the request ID and Google's per-error messages are returned;
+            # never the request payload or credentials.
+            raise ToolError(utils.format_google_ads_error(ex)) from None
         # SDK exceptions can include request data or credentials. Do not return
         # or chain untrusted exception text into an MCP response or traceback.
         raise ToolError("Google Ads API call failed") from None
