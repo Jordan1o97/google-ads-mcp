@@ -2,10 +2,37 @@
 #
 # Tools configuration for the Google Ads MCP server.
 # Modify this file to enable/disable tool namespaces or set custom prefixes.
+#
+# Write policy (reviewed 2026-11-10): account creation under the manager
+# account and building PAUSED Search campaigns (budget, campaign, targeting,
+# ad groups, responsive search ads, keywords, image/text assets).
+# Enforced in code regardless of this file (ads_mcp/tools/api.py):
+#   - billing, payments, account links and user access RPCs are never executable;
+#   - GoogleAdsService.Mutate and all `generate*` methods are never executable;
+#   - campaigns, ad groups and ads can only be created/kept PAUSED (ENABLED is rejected).
+# Pass `"validate_only": true` inside `request` to dry-run any write first.
 
 namespaces:
   customers: true
   search: true
   metadata: true
-  labels: true
-  assets: true
+  labels: false
+  assets:
+    enabled: true
+    enabled_tools:
+      - create_asset: true
+      - upload_video_asset: false
+  api:
+    enabled: true
+    allow_writes: true
+    allowed_methods:
+      - CustomerService.CreateCustomerClient
+      - CampaignBudgetService.MutateCampaignBudgets
+      - CampaignService.MutateCampaigns
+      - CampaignCriterionService.MutateCampaignCriteria
+      - AdGroupService.MutateAdGroups
+      - AdGroupAdService.MutateAdGroupAds
+      - AdGroupCriterionService.MutateAdGroupCriteria
+      - AssetService.MutateAssets
+      - CampaignAssetService.MutateCampaignAssets
+      - AdGroupAssetService.MutateAdGroupAssets
